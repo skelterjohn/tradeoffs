@@ -59,7 +59,7 @@ func OverlyConcurrentMergeSort(data []int) {
 	Merge(data, left, right)
 }
 
-func ConcurrentPivotMergeSort(data []int) {
+func SlightlyConcurrentMergeSort(data []int) {
 	var activeWorkers int32
 	var aux func([]int)
 	aux = func(data []int) {
@@ -71,7 +71,9 @@ func ConcurrentPivotMergeSort(data []int) {
 		left := append([]int{}, data[:pivot]...)
 		right := append([]int{}, data[pivot:]...)
 
-		if atomic.LoadInt32(&activeWorkers) < int32(runtime.NumCPU()) && atomic.CompareAndSwapInt32(&activeWorkers, activeWorkers, activeWorkers+1) {
+		curActiveWorkers := atomic.LoadInt32(&activeWorkers)
+
+		if curActiveWorkers < int32(runtime.NumCPU()) && atomic.CompareAndSwapInt32(&activeWorkers, curActiveWorkers, curActiveWorkers+1) {
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -86,6 +88,9 @@ func ConcurrentPivotMergeSort(data []int) {
 			MergeSort(right)
 		}
 		Merge(data, left, right)
+
+		curActiveWorkers = atomic.LoadInt32(&activeWorkers)
+		atomic.CompareAndSwapInt32(&activeWorkers, curActiveWorkers, curActiveWorkers-1)
 	}
 	aux(data)
 }
@@ -117,8 +122,8 @@ func TimingTest(name string, data []int, merger func([]int)) {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	data := make([]int, 1e5)
+	data := make([]int, 5e5)
 	TimingTest("Normal", data, MergeSort)
 	TimingTest("Overly concurrent", data, OverlyConcurrentMergeSort)
-	TimingTest("Slightly concurrent", data, ConcurrentPivotMergeSort)
+	TimingTest("Slightly concurrent", data, SlightlyConcurrentMergeSort)
 }
